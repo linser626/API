@@ -3,7 +3,8 @@ import { defineStore } from 'pinia'
 export const useAppStore = defineStore('app', {
   state: () => ({
     sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true',
-    theme: localStorage.getItem('theme') || 'light'
+    theme: localStorage.getItem('theme') || 'light',
+    locale: localStorage.getItem('locale') || 'zh'
   }),
 
   actions: {
@@ -16,6 +17,11 @@ export const useAppStore = defineStore('app', {
       this.theme = theme
       localStorage.setItem('theme', theme)
       document.documentElement.setAttribute('data-theme', theme)
+    },
+
+    setLocale(locale) {
+      this.locale = locale
+      localStorage.setItem('locale', locale)
     }
   }
 })

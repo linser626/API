@@ -6,6 +6,7 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import App from './App.vue'
 import router from './router'
 import { createPinia } from 'pinia'
+import i18n from './locales'
 import './assets/styles/global.scss'
 import 'nprogress/nprogress.css'
 
@@ -18,4 +19,5 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 app.use(ElementPlus, { locale: zhCn })
 app.use(router)
 app.use(createPinia())
+app.use(i18n)
 app.mount('#app')

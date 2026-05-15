@@ -72,6 +72,12 @@ const routes = [
         meta: { title: '推荐返利' }
       },
       {
+        path: 'team',
+        name: 'Team',
+        component: () => import('@/views/team/Index.vue'),
+        meta: { title: '团队管理' }
+      },
+      {
         path: 'docs',
         name: 'Docs',
         component: () => import('@/views/docs/Index.vue'),

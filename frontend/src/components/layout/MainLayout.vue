@@ -46,6 +46,10 @@
           <el-icon><Share /></el-icon>
           <template #title>推荐返利</template>
         </el-menu-item>
+        <el-menu-item index="/team">
+          <el-icon><UserFilled /></el-icon>
+          <template #title>团队管理</template>
+        </el-menu-item>
         <el-menu-item index="/docs">
           <el-icon><Document /></el-icon>
           <template #title>API文档</template>
@@ -117,6 +121,7 @@
               </div>
             </div>
           </el-popover>
+          <LanguageToggle />
           <el-dropdown trigger="click" @command="handleCommand">
             <div class="user-info">
               <el-avatar :size="32" :icon="UserFilled" />
@@ -188,6 +193,7 @@ import { getNotifications, markNotificationRead, markAllNotificationsRead } from
 import { formatMoney } from '@/utils/format'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UserFilled } from '@element-plus/icons-vue'
+import LanguageToggle from '@/components/LanguageToggle.vue'
 
 const route = useRoute()
 const router = useRouter()

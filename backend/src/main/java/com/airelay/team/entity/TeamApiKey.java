@@ -1,44 +1,41 @@
-package com.airelay.user.entity;
+package com.airelay.team.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.io.Serializable;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("user")
-public class User implements Serializable {
+@TableName("team_api_key")
+public class TeamApiKey implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private String username;
-
-    private String email;
-
-    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
-    private String password;
-
-    private String avatar;
-
-    private String referralCode;
-
     private Long teamId;
 
-    private String role;
+    private String keyValue;
+
+    private String name;
+
+    private Long createdBy;
 
     private Integer status;
 
-    private BigDecimal balance;
+    private Integer rateLimitRpm;
+
+    private Integer rateLimitTpm;
 
     private Long totalQuota;
 
     private Long usedQuota;
+
+    private LocalDateTime expiresAt;
+
+    private LocalDateTime lastUsedAt;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
