@@ -58,6 +58,12 @@ const routes = [
         name: 'Coupons',
         component: () => import('@/views/coupon/Index.vue'),
         meta: { title: '优惠券' }
+      },
+      {
+        path: 'notifications',
+        name: 'Notifications',
+        component: () => import('@/views/monitor/Index.vue'),
+        meta: { title: '通知中心' }
       }
     ]
   },

@@ -121,24 +121,20 @@ public class RelayService {
 
     private ResponseEntity<byte[]> relayNonStreamingRequest(String requestBody, ApiKey apiKey, User user, String model, String ipAddress, String requestType, String upstreamPath, List<Channel> channels) {
         Exception lastException = null;
+        List<Channel> availableChannels = new ArrayList<>(channels);
 
-        for (int attempt = 0; attempt < channels.size(); attempt++) {
-            Channel channel = loadBalanceService.selectChannel(channels, DEFAULT_STRATEGY);
+        for (int attempt = 0; attempt < availableChannels.size(); attempt++) {
+            Channel channel = loadBalanceService.selectChannel(availableChannels, DEFAULT_STRATEGY);
             if (channel == null) {
                 break;
             }
-            channels.remove(channel);
+            availableChannels.remove(channel);
 
             long startTime = System.currentTimeMillis();
             try {
-                String url = buildUpstreamUrl(channel.getBaseUrl(), upstreamPath);
-                String authHeader = buildAuthHeader(channel);
+                String url = buildUpstreamUrl(channel, upstreamPath);
 
-                WebClient webClient = webClientBuilder
-                        .baseUrl(url)
-                        .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                        .defaultHeader(HttpHeaders.AUTHORIZATION, authHeader)
-                        .build();
+                WebClient webClient = buildWebClientForChannel(channel, url);
 
                 String modifiedBody = replaceModelInBody(requestBody, model);
 
@@ -184,7 +180,7 @@ public class RelayService {
                 long latencyMs = System.currentTimeMillis() - startTime;
                 channelService.updateChannelStats(channel.getId(), false, latencyMs);
                 log.warn("通道请求失败, channelId={}, model={}, attempt={}/{}, error={}",
-                        channel.getId(), model, attempt + 1, channels.size() + attempt + 1, e.getMessage());
+                        channel.getId(), model, attempt + 1, channels.size(), e.getMessage());
                 logRequest(user.getId(), apiKey.getId(), channel.getId(), model, requestType,
                         new TokenUsage(0, 0, 0), BigDecimal.ZERO, latencyMs, "fail", e.getMessage(), ipAddress);
             }
@@ -202,14 +198,9 @@ public class RelayService {
         long startTime = System.currentTimeMillis();
 
         try {
-            String url = buildUpstreamUrl(channel.getBaseUrl(), upstreamPath);
-            String authHeader = buildAuthHeader(channel);
+            String url = buildUpstreamUrl(channel, upstreamPath);
 
-            WebClient webClient = webClientBuilder
-                    .baseUrl(url)
-                    .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                    .defaultHeader(HttpHeaders.AUTHORIZATION, authHeader)
-                    .build();
+            WebClient webClient = buildWebClientForChannel(channel, url);
 
             String modifiedBody = replaceModelInBody(requestBody, model);
 
@@ -301,14 +292,9 @@ public class RelayService {
         }
 
         long startTime = System.currentTimeMillis();
-        String url = buildUpstreamUrl(channel.getBaseUrl(), "/v1/chat/completions");
-        String authHeader = buildAuthHeader(channel);
+        String url = buildUpstreamUrl(channel, "/v1/chat/completions");
 
-        WebClient webClient = webClientBuilder
-                .baseUrl(url)
-                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .defaultHeader(HttpHeaders.AUTHORIZATION, authHeader)
-                .build();
+        WebClient webClient = buildWebClientForChannel(channel, url);
 
         String modifiedBody = replaceModelInBody(requestBody, actualModel);
 
@@ -457,17 +443,37 @@ public class RelayService {
         }
     }
 
-    private String buildUpstreamUrl(String baseUrl, String path) {
-        String base = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
-        return base + path;
+    private String buildUpstreamUrl(Channel channel, String path) {
+        String base = channel.getBaseUrl();
+        if (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        String url = base + path;
+
+        if ("gemini".equalsIgnoreCase(channel.getType())) {
+            String separator = url.contains("?") ? "&" : "?";
+            url = url + separator + "key=" + channel.getApiKey();
+        }
+
+        return url;
     }
 
-    private String buildAuthHeader(Channel channel) {
+    private WebClient buildWebClientForChannel(Channel channel, String url) {
         String type = channel.getType();
+        WebClient.Builder builder = webClientBuilder
+                .baseUrl(url)
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
+
         if ("claude".equalsIgnoreCase(type)) {
-            return "Bearer " + channel.getApiKey();
+            builder.defaultHeader("x-api-key", channel.getApiKey());
+            builder.defaultHeader("anthropic-version", "2023-06-01");
+        } else if ("gemini".equalsIgnoreCase(type)) {
+            // API key is in URL query param, no auth header needed
+        } else {
+            builder.defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + channel.getApiKey());
         }
-        return "Bearer " + channel.getApiKey();
+
+        return builder.build();
     }
 
     @SuppressWarnings("unchecked")

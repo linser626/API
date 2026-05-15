@@ -59,38 +59,73 @@
       </el-col>
     </el-row>
 
-    <el-dialog v-model="payDialogVisible" title="确认订阅" width="480px">
+    <el-dialog v-model="payDialogVisible" title="确认订阅" width="480px" @close="handlePayDialogClose">
       <div class="pay-info">
         <div class="pay-plan">
           <span>套餐:</span>
           <strong>{{ selectedPlan?.name }}</strong>
         </div>
         <div class="pay-amount">
-          <span>金额:</span>
-          <strong class="text-danger">¥{{ selectedPlan?.price }}</strong>
+          <span>原价:</span>
+          <strong>¥{{ selectedPlan?.price }}</strong>
+        </div>
+        <div class="pay-discount" v-if="discountAmount > 0">
+          <span>优惠:</span>
+          <strong class="text-success">-¥{{ discountAmount.toFixed(2) }}</strong>
+        </div>
+        <div class="pay-final">
+          <span>实付:</span>
+          <strong class="text-danger">¥{{ finalPrice.toFixed(2) }}</strong>
         </div>
       </div>
       <el-form :model="payForm" label-width="90px" class="mt-20">
         <el-form-item label="支付方式">
           <el-radio-group v-model="payForm.payment_method">
-            <el-radio value="alipay">支付宝</el-radio>
-            <el-radio value="wechat">微信支付</el-radio>
+            <el-radio value="alipay">
+              <div class="payment-option">
+                <el-icon :size="18" color="#1677ff"><CreditCard /></el-icon>
+                <span>支付宝</span>
+              </div>
+            </el-radio>
+            <el-radio value="wechat">
+              <div class="payment-option">
+                <el-icon :size="18" color="#07c160"><ChatDotRound /></el-icon>
+                <span>微信支付</span>
+              </div>
+            </el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="优惠券码">
-          <el-input v-model="payForm.coupon_code" placeholder="可选，输入优惠券码" clearable />
+          <div class="coupon-input-row">
+            <el-input v-model="payForm.coupon_code" placeholder="可选，输入优惠券码" clearable />
+            <el-button type="primary" plain @click="applyCoupon" :loading="couponLoading">验证</el-button>
+          </div>
+          <div v-if="couponInfo" class="coupon-result text-success">
+            优惠券已生效: {{ couponInfo.description || `优惠 ¥${discountAmount.toFixed(2)}` }}
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="payDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="payLoading" @click="confirmSubscribe">确认支付</el-button>
+        <el-button type="primary" :loading="payLoading" @click="confirmSubscribe">确认支付 ¥{{ finalPrice.toFixed(2) }}</el-button>
       </template>
+    </el-dialog>
+
+    <el-dialog v-model="qrDialogVisible" title="微信支付" width="360px" :close-on-click-modal="false">
+      <div class="qr-pay-section">
+        <div class="qr-amount">支付金额: <strong class="text-danger">¥{{ finalPrice.toFixed(2) }}</strong></div>
+        <div class="qr-placeholder">
+          <el-icon :size="120" color="#07c160"><ChatDotRound /></el-icon>
+          <p>请使用微信扫描二维码完成支付</p>
+        </div>
+        <el-button type="primary" class="qr-confirm-btn" @click="handleQrConfirm">我已完成支付</el-button>
+      </div>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { listPlans, getCurrentSubscription, subscribe, cancelSubscription } from '@/api/subscription'
 import { pay } from '@/api/payment'
 import { formatDate } from '@/utils/format'
@@ -101,6 +136,9 @@ const currentSubscription = ref(null)
 const payDialogVisible = ref(false)
 const payLoading = ref(false)
 const selectedPlan = ref(null)
+const qrDialogVisible = ref(false)
+const couponLoading = ref(false)
+const couponInfo = ref(null)
 
 const planIcons = {
   '免费版': 'Ticket',
@@ -118,6 +156,19 @@ const defaultFeatures = [
 const payForm = reactive({
   payment_method: 'alipay',
   coupon_code: ''
+})
+
+const discountAmount = computed(() => {
+  if (!couponInfo.value || !selectedPlan.value) return 0
+  if (couponInfo.value.type === 'percent') {
+    return selectedPlan.value.price * (couponInfo.value.value / 100)
+  }
+  return couponInfo.value.value || 0
+})
+
+const finalPrice = computed(() => {
+  const price = selectedPlan.value?.price || 0
+  return Math.max(0, price - discountAmount.value)
 })
 
 const loadData = async () => {
@@ -143,25 +194,61 @@ const handleSubscribe = (plan) => {
   selectedPlan.value = plan
   payForm.payment_method = 'alipay'
   payForm.coupon_code = ''
+  couponInfo.value = null
   payDialogVisible.value = true
+}
+
+const applyCoupon = async () => {
+  if (!payForm.coupon_code) {
+    ElMessage.warning('请输入优惠券码')
+    return
+  }
+  couponLoading.value = true
+  try {
+    const res = await pay({ coupon_code: payForm.coupon_code, action: 'verify' })
+    couponInfo.value = res.data || null
+    ElMessage.success('优惠券验证成功')
+  } catch (error) {
+    couponInfo.value = null
+  } finally {
+    couponLoading.value = false
+  }
+}
+
+const handlePayDialogClose = () => {
+  couponInfo.value = null
 }
 
 const confirmSubscribe = async () => {
   payLoading.value = true
   try {
-    await subscribe({
+    const res = await subscribe({
       plan_id: selectedPlan.value.id,
       payment_method: payForm.payment_method,
       coupon_code: payForm.coupon_code || undefined
     })
-    ElMessage.success('订阅成功')
     payDialogVisible.value = false
+
+    if (payForm.payment_method === 'alipay' && res.data?.pay_url) {
+      window.open(res.data.pay_url, '_blank')
+      ElMessage.success('已跳转至支付宝，请完成支付')
+    } else if (payForm.payment_method === 'wechat') {
+      qrDialogVisible.value = true
+    } else {
+      ElMessage.success('订阅成功')
+    }
     loadData()
   } catch (error) {
     // handled by interceptor
   } finally {
     payLoading.value = false
   }
+}
+
+const handleQrConfirm = async () => {
+  qrDialogVisible.value = false
+  loadData()
+  ElMessage.success('支付结果确认中')
 }
 
 const handleCancel = () => {
@@ -280,11 +367,63 @@ onMounted(() => {
   }
 
   .pay-info {
-    .pay-plan, .pay-amount {
+    .pay-plan, .pay-amount, .pay-discount, .pay-final {
       display: flex;
       justify-content: space-between;
       padding: 8px 0;
       font-size: 15px;
+    }
+
+    .pay-final {
+      border-top: 1px solid #f0f0f0;
+      margin-top: 4px;
+      padding-top: 12px;
+      font-size: 16px;
+    }
+  }
+
+  .payment-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .coupon-input-row {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+
+    .el-input {
+      flex: 1;
+    }
+  }
+
+  .coupon-result {
+    font-size: 13px;
+    margin-top: 6px;
+  }
+
+  .qr-pay-section {
+    text-align: center;
+
+    .qr-amount {
+      font-size: 16px;
+      margin-bottom: 20px;
+    }
+
+    .qr-placeholder {
+      padding: 30px 0;
+
+      p {
+        margin-top: 16px;
+        font-size: 14px;
+        color: var(--color-text-secondary);
+      }
+    }
+
+    .qr-confirm-btn {
+      width: 100%;
+      margin-top: 20px;
     }
   }
 }

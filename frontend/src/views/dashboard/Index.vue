@@ -112,6 +112,104 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <el-row :gutter="20" class="mt-20">
+      <el-col :xs="24" :lg="12">
+        <el-card shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span class="card-title">快速入门</span>
+            </div>
+          </template>
+          <el-steps direction="vertical" :active="3" finish-status="success">
+            <el-step title="创建 API Key">
+              <template #description>
+                <span>前往 <el-link type="primary" @click="$router.push('/apikeys')">API密钥</el-link> 页面创建一个新的密钥</span>
+              </template>
+            </el-step>
+            <el-step title="配置客户端">
+              <template #description>
+                <span>将 Base URL 和 API Key 配置到你的客户端中</span>
+              </template>
+            </el-step>
+            <el-step title="开始调用模型">
+              <template #description>
+                <span>使用 OpenAI 兼容接口调用各种大模型</span>
+              </template>
+            </el-step>
+          </el-steps>
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :lg="12">
+        <el-card shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span class="card-title">API接入指南</span>
+              <el-button link type="primary" @click="apiGuideExpanded = !apiGuideExpanded">
+                {{ apiGuideExpanded ? '收起' : '展开' }}
+              </el-button>
+            </div>
+          </template>
+          <el-collapse v-model="apiGuideExpanded">
+            <el-collapse-item title="Base URL & 认证" name="auth">
+              <div class="api-guide-block">
+                <p><strong>Base URL:</strong> <code>https://your-domain/v1</code></p>
+                <p><strong>认证方式:</strong> <code>Bearer sk-your-api-key</code></p>
+              </div>
+            </el-collapse-item>
+            <el-collapse-item title="cURL 示例" name="curl">
+              <div class="api-guide-block">
+                <pre><code>curl https://your-domain/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-3.5-turbo",
+    "messages": [
+      {"role": "user", "content": "Hello!"}
+    ]
+  }'</code></pre>
+              </div>
+            </el-collapse-item>
+            <el-collapse-item title="Python 示例" name="python">
+              <div class="api-guide-block">
+                <pre><code>from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://your-domain/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+print(response.choices[0].message.content)</code></pre>
+              </div>
+            </el-collapse-item>
+            <el-collapse-item title="Node.js 示例" name="nodejs">
+              <div class="api-guide-block">
+                <pre><code>import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://your-domain/v1'
+});
+
+const response = await client.chat.completions.create({
+  model: 'gpt-3.5-turbo',
+  messages: [
+    { role: 'user', content: 'Hello!' }
+  ]
+});
+console.log(response.choices[0].message.content);</code></pre>
+              </div>
+            </el-collapse-item>
+          </el-collapse>
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -145,6 +243,7 @@ const subscriptionInfo = reactive({
 
 const recentActivities = ref([])
 const dailyData = ref([])
+const apiGuideExpanded = ref(['auth'])
 
 const usageChartOption = computed(() => {
   const dates = dailyData.value.map(item => item.date)
@@ -355,6 +454,37 @@ onMounted(() => {
           color: var(--color-text-secondary);
           margin-top: 4px;
         }
+      }
+    }
+  }
+
+  .api-guide-block {
+    p {
+      margin: 6px 0;
+      font-size: 14px;
+      color: var(--color-text-regular);
+    }
+
+    code {
+      background-color: #f5f7fa;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #c7254e;
+    }
+
+    pre {
+      background-color: #f5f7fa;
+      border-radius: 6px;
+      padding: 12px;
+      overflow-x: auto;
+
+      code {
+        background: none;
+        padding: 0;
+        color: #303133;
+        font-size: 13px;
+        line-height: 1.6;
       }
     }
   }

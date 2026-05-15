@@ -82,7 +82,7 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="rechargeDialogVisible" title="账户充值" width="480px">
+    <el-dialog v-model="rechargeDialogVisible" title="账户充值" width="480px" @close="handleRechargeDialogClose">
       <el-form :model="rechargeForm" label-width="90px">
         <el-form-item label="充值金额">
           <el-input-number
@@ -107,18 +107,40 @@
         </el-form-item>
         <el-form-item label="支付方式">
           <el-radio-group v-model="rechargeForm.payment_method">
-            <el-radio value="alipay">支付宝</el-radio>
-            <el-radio value="wechat">微信支付</el-radio>
+            <el-radio value="alipay">
+              <div class="payment-option">
+                <el-icon :size="18" color="#1677ff"><CreditCard /></el-icon>
+                <span>支付宝</span>
+              </div>
+            </el-radio>
+            <el-radio value="wechat">
+              <div class="payment-option">
+                <el-icon :size="18" color="#07c160"><ChatDotRound /></el-icon>
+                <span>微信支付</span>
+              </div>
+            </el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="优惠券码">
-          <el-input v-model="rechargeForm.coupon_code" placeholder="可选，输入优惠券码" clearable />
+          <div class="coupon-input-row">
+            <el-input v-model="rechargeForm.coupon_code" placeholder="可选，输入优惠券码" clearable />
+            <el-button type="primary" plain @click="applyRechargeCoupon" :loading="rechargeCouponLoading">验证</el-button>
+          </div>
+          <div v-if="rechargeCouponInfo" class="coupon-result text-success">
+            优惠券已生效: {{ rechargeCouponInfo.description || `优惠 ¥${rechargeDiscountAmount.toFixed(2)}` }}
+          </div>
+        </el-form-item>
+        <el-form-item label="实付金额">
+          <div class="final-amount">
+            <span v-if="rechargeDiscountAmount > 0" class="original-price">¥{{ rechargeForm.amount }}</span>
+            <span class="final-price">¥{{ rechargeFinalAmount.toFixed(2) }}</span>
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="rechargeDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="rechargeLoading" @click="handleRecharge">
-          确认充值 ¥{{ rechargeForm.amount }}
+          确认充值 ¥{{ rechargeFinalAmount.toFixed(2) }}
         </el-button>
       </template>
     </el-dialog>
@@ -126,14 +148,17 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { getOverview, getTransactions, recharge } from '@/api/billing'
+import { pay } from '@/api/payment'
 import { formatMoney, formatDate } from '@/utils/format'
 import { ElMessage } from 'element-plus'
 
 const loading = ref(false)
 const rechargeDialogVisible = ref(false)
 const rechargeLoading = ref(false)
+const rechargeCouponLoading = ref(false)
+const rechargeCouponInfo = ref(null)
 
 const overview = reactive({
   balance: 0,
@@ -158,6 +183,18 @@ const rechargeForm = reactive({
   amount: 100,
   payment_method: 'alipay',
   coupon_code: ''
+})
+
+const rechargeDiscountAmount = computed(() => {
+  if (!rechargeCouponInfo.value) return 0
+  if (rechargeCouponInfo.value.type === 'percent') {
+    return rechargeForm.amount * (rechargeCouponInfo.value.value / 100)
+  }
+  return rechargeCouponInfo.value.value || 0
+})
+
+const rechargeFinalAmount = computed(() => {
+  return Math.max(0, rechargeForm.amount - rechargeDiscountAmount.value)
 })
 
 const typeTagMap = {
@@ -212,7 +249,29 @@ const showRechargeDialog = () => {
   rechargeForm.amount = 100
   rechargeForm.payment_method = 'alipay'
   rechargeForm.coupon_code = ''
+  rechargeCouponInfo.value = null
   rechargeDialogVisible.value = true
+}
+
+const handleRechargeDialogClose = () => {
+  rechargeCouponInfo.value = null
+}
+
+const applyRechargeCoupon = async () => {
+  if (!rechargeForm.coupon_code) {
+    ElMessage.warning('请输入优惠券码')
+    return
+  }
+  rechargeCouponLoading.value = true
+  try {
+    const res = await pay({ coupon_code: rechargeForm.coupon_code, action: 'verify' })
+    rechargeCouponInfo.value = res.data || null
+    ElMessage.success('优惠券验证成功')
+  } catch (error) {
+    rechargeCouponInfo.value = null
+  } finally {
+    rechargeCouponLoading.value = false
+  }
 }
 
 const handleRecharge = async () => {
@@ -222,12 +281,17 @@ const handleRecharge = async () => {
   }
   rechargeLoading.value = true
   try {
-    await recharge({
+    const res = await recharge({
       amount: rechargeForm.amount,
       payment_method: rechargeForm.payment_method,
       coupon_code: rechargeForm.coupon_code || undefined
     })
-    ElMessage.success('充值成功')
+    if (rechargeForm.payment_method === 'alipay' && res.data?.pay_url) {
+      window.open(res.data.pay_url, '_blank')
+      ElMessage.success('已跳转至支付宝，请完成支付')
+    } else {
+      ElMessage.success('充值成功')
+    }
     rechargeDialogVisible.value = false
     loadOverview()
     loadTransactions()
@@ -293,6 +357,42 @@ onMounted(() => {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+  }
+
+  .payment-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .coupon-input-row {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+
+    .el-input {
+      flex: 1;
+    }
+  }
+
+  .coupon-result {
+    font-size: 13px;
+    margin-top: 6px;
+  }
+
+  .final-amount {
+    .original-price {
+      text-decoration: line-through;
+      color: var(--color-text-secondary);
+      font-size: 14px;
+      margin-right: 8px;
+    }
+
+    .final-price {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--color-primary);
+    }
   }
 }
 </style>

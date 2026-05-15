@@ -2,6 +2,8 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
 
+let activeRequests = 0
+
 const service = axios.create({
   baseURL: '',
   timeout: 30000
@@ -9,6 +11,7 @@ const service = axios.create({
 
 service.interceptors.request.use(
   (config) => {
+    activeRequests++
     const token = localStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
@@ -16,12 +19,14 @@ service.interceptors.request.use(
     return config
   },
   (error) => {
+    activeRequests = Math.max(0, activeRequests - 1)
     return Promise.reject(error)
   }
 )
 
 service.interceptors.response.use(
   (response) => {
+    activeRequests = Math.max(0, activeRequests - 1)
     const res = response.data
     if (res.code && res.code !== 0 && res.code !== 200) {
       ElMessage.error(res.message || '请求失败')
@@ -30,13 +35,18 @@ service.interceptors.response.use(
     return res
   },
   (error) => {
-    if (error.response) {
+    activeRequests = Math.max(0, activeRequests - 1)
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      ElMessage.error('请求超时，请检查网络后重试')
+    } else if (error.response) {
       const { status, data } = error.response
       if (status === 401) {
         localStorage.removeItem('token')
         localStorage.removeItem('refreshToken')
         localStorage.removeItem('userInfo')
-        router.push('/login')
+        const currentPath = router.currentRoute.value?.fullPath
+        const redirectParam = currentPath && currentPath !== '/login' ? `?redirect=${encodeURIComponent(currentPath)}` : ''
+        router.push(`/login${redirectParam}`)
         ElMessage.error('登录已过期，请重新登录')
       } else if (status === 403) {
         ElMessage.error('没有权限执行此操作')
@@ -55,6 +65,8 @@ service.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+export const getLoadingCount = () => activeRequests
 
 export const get = (url, params) => service.get(url, { params })
 export const post = (url, data) => service.post(url, data)

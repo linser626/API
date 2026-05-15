@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
@@ -30,8 +31,8 @@ public class RelayController {
     private final ObjectMapper objectMapper;
 
     @Operation(summary = "Chat Completion - OpenAI兼容")
-    @PostMapping(value = "/v1/chat/completions", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> relayChatCompletion(
+    @PostMapping(value = "/v1/chat/completions", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Object relayChatCompletion(
             @RequestBody String requestBody,
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestHeader(value = "X-Api-Key", required = false) String xApiKey,
@@ -44,19 +45,15 @@ public class RelayController {
         boolean isStreaming = isStreamingRequest(requestBody);
         if (isStreaming) {
             Flux<String> stream = relayService.relayStreamingChatCompletion(requestBody, apiKey, model, ipAddress);
-            return ResponseEntity.ok()
-                    .contentType(MediaType.TEXT_EVENT_STREAM)
-                    .header("Cache-Control", "no-cache")
-                    .header("X-Accel-Buffering", "no")
-                    .body(stream);
+            return stream.map(data -> ServerSentEvent.<String>builder().data(data).build());
         }
 
         return relayService.relayChatCompletion(requestBody, apiKey, model, ipAddress);
     }
 
     @Operation(summary = "Text Completion - OpenAI兼容")
-    @PostMapping(value = "/v1/completions", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> relayCompletion(
+    @PostMapping(value = "/v1/completions", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Object relayCompletion(
             @RequestBody String requestBody,
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestHeader(value = "X-Api-Key", required = false) String xApiKey,
@@ -69,11 +66,7 @@ public class RelayController {
         boolean isStreaming = isStreamingRequest(requestBody);
         if (isStreaming) {
             Flux<String> stream = relayService.relayStreamingChatCompletion(requestBody, apiKey, model, ipAddress);
-            return ResponseEntity.ok()
-                    .contentType(MediaType.TEXT_EVENT_STREAM)
-                    .header("Cache-Control", "no-cache")
-                    .header("X-Accel-Buffering", "no")
-                    .body(stream);
+            return stream.map(data -> ServerSentEvent.<String>builder().data(data).build());
         }
 
         return relayService.relayCompletion(requestBody, apiKey, model, ipAddress);

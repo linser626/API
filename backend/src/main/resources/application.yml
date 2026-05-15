@@ -98,6 +98,12 @@ app:
     max-retries: 3
     retry-interval: 1000
     default-channel: openai
+    load-balance-strategy: PRIORITY
+    channel-timeout-ms: 30000
+    rate-limit-enabled: true
+  notification:
+    balance-warning-threshold: 1.0
+    subscription-warning-days: 3
   channel:
     openai:
       base-url: https://api.openai.com

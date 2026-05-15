@@ -68,6 +68,43 @@
             <el-icon><Wallet /></el-icon>
             <span>余额: {{ formatMoney(userStore.balance) }}</span>
           </div>
+          <el-popover
+            placement="bottom-end"
+            :width="360"
+            trigger="click"
+            @show="fetchNotifications"
+          >
+            <template #reference>
+              <div class="notification-bell">
+                <el-badge :value="unreadCount" :hidden="unreadCount === 0" :max="99">
+                  <el-icon :size="20"><Bell /></el-icon>
+                </el-badge>
+              </div>
+            </template>
+            <div class="notification-panel">
+              <div class="notification-header">
+                <span class="notification-title">通知</span>
+                <el-button v-if="unreadCount > 0" link type="primary" size="small" @click="handleMarkAllRead">全部已读</el-button>
+              </div>
+              <div class="notification-list" v-loading="notificationLoading">
+                <div
+                  v-for="item in notifications"
+                  :key="item.id"
+                  class="notification-item"
+                  :class="{ unread: !item.is_read }"
+                  @click="handleNotificationClick(item)"
+                >
+                  <div class="notification-dot" v-if="!item.is_read"></div>
+                  <div class="notification-content">
+                    <div class="notification-item-title">{{ item.title }}</div>
+                    <div class="notification-item-text">{{ item.content }}</div>
+                    <div class="notification-item-time">{{ item.created_at }}</div>
+                  </div>
+                </div>
+                <el-empty v-if="!notificationLoading && notifications.length === 0" description="暂无通知" :image-size="60" />
+              </div>
+            </div>
+          </el-popover>
           <el-dropdown trigger="click" @command="handleCommand">
             <div class="user-info">
               <el-avatar :size="32" :icon="UserFilled" />
@@ -130,11 +167,12 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
 import { updateProfile, changePassword } from '@/api/auth'
+import { getNotifications, markNotificationRead, markAllNotificationsRead } from '@/api/monitor'
 import { formatMoney } from '@/utils/format'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UserFilled } from '@element-plus/icons-vue'
@@ -159,6 +197,56 @@ const passwordForm = reactive({
   old_password: '',
   new_password: '',
   confirm_password: ''
+})
+
+const notifications = ref([])
+const notificationLoading = ref(false)
+let notificationTimer = null
+
+const unreadCount = computed(() => notifications.value.filter(n => !n.is_read).length)
+
+const fetchNotifications = async () => {
+  notificationLoading.value = true
+  try {
+    const res = await getNotifications()
+    notifications.value = res.data?.list || res.data || []
+  } catch (error) {
+    // silently handle
+  } finally {
+    notificationLoading.value = false
+  }
+}
+
+const handleNotificationClick = async (item) => {
+  if (!item.is_read) {
+    try {
+      await markNotificationRead(item.id)
+      item.is_read = true
+    } catch (error) {
+      // silently handle
+    }
+  }
+}
+
+const handleMarkAllRead = async () => {
+  try {
+    await markAllNotificationsRead()
+    notifications.value.forEach(n => { n.is_read = true })
+  } catch (error) {
+    // silently handle
+  }
+}
+
+onMounted(() => {
+  fetchNotifications()
+  notificationTimer = setInterval(fetchNotifications, 60000)
+})
+
+onUnmounted(() => {
+  if (notificationTimer) {
+    clearInterval(notificationTimer)
+    notificationTimer = null
+  }
 })
 
 const handleCommand = (command) => {
@@ -311,6 +399,19 @@ const handleChangePassword = async () => {
         font-size: 14px;
       }
 
+      .notification-bell {
+        cursor: pointer;
+        padding: 6px;
+        border-radius: 6px;
+        transition: background-color 0.3s;
+        display: flex;
+        align-items: center;
+
+        &:hover {
+          background-color: #f5f7fa;
+        }
+      }
+
       .user-info {
         display: flex;
         align-items: center;
@@ -336,6 +437,81 @@ const handleChangePassword = async () => {
     flex: 1;
     overflow-y: auto;
     padding: 20px;
+  }
+}
+</style>
+
+<style lang="scss">
+.notification-panel {
+  .notification-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f0f0f0;
+    margin-bottom: 8px;
+
+    .notification-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #303133;
+    }
+  }
+
+  .notification-list {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .notification-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+
+    &:hover {
+      background-color: #f5f7fa;
+    }
+
+    &.unread {
+      background-color: #ecf5ff;
+    }
+
+    .notification-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #409eff;
+      margin-top: 6px;
+      flex-shrink: 0;
+    }
+
+    .notification-content {
+      flex: 1;
+      min-width: 0;
+
+      .notification-item-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: #303133;
+      }
+
+      .notification-item-text {
+        font-size: 13px;
+        color: #606266;
+        margin-top: 4px;
+        line-height: 1.4;
+      }
+
+      .notification-item-time {
+        font-size: 12px;
+        color: #909399;
+        margin-top: 4px;
+      }
+    }
   }
 }
 </style>
