@@ -32,6 +32,7 @@ public class UserService {
     private final SubscriptionMapper subscriptionMapper;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
+    private final ReferralService referralService;
 
     @Value("${jwt.expiration}")
     private long jwtExpiration;
@@ -82,6 +83,12 @@ public class UserService {
 
             user.setTotalQuota(defaultPlan.getTokenQuota());
             userMapper.updateById(user);
+        }
+
+        referralService.getOrCreateReferral(user.getId());
+
+        if (request.getReferralCode() != null && !request.getReferralCode().trim().isEmpty()) {
+            referralService.processReferral(user.getId(), request.getReferralCode().trim());
         }
 
         return user;

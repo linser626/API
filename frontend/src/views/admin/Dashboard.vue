@@ -4,6 +4,24 @@
       <h2>管理面板</h2>
     </div>
 
+    <el-card shadow="hover" class="mb-20">
+      <template #header>
+        <span class="card-title">系统设置</span>
+      </template>
+      <div class="setting-item">
+        <div class="setting-info">
+          <div class="setting-label">内容审核</div>
+          <div class="setting-desc">启用后，所有API请求将进行关键词过滤和注入检测</div>
+        </div>
+        <el-switch
+          v-model="moderationEnabled"
+          active-text="开启"
+          inactive-text="关闭"
+          @change="handleModerationToggle"
+        />
+      </div>
+    </el-card>
+
     <el-row :gutter="20" class="mb-20">
       <el-col :xs="12" :sm="8" :lg="4">
         <el-card class="stats-card" shadow="hover">
@@ -129,8 +147,9 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart, BarChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
-import { getDashboard, getRevenueStats, getUserStats, getRecentErrors } from '@/api/admin'
+import { getDashboard, getRevenueStats, getUserStats, getRecentErrors, getModerationStatus, toggleModeration } from '@/api/admin'
 import { formatMoney, formatTokens, formatDate } from '@/utils/format'
+import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
 
 use([CanvasRenderer, LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent])
@@ -147,6 +166,7 @@ const overview = reactive({
 const revenueData = ref([])
 const userGrowthData = ref([])
 const recentErrors = ref([])
+const moderationEnabled = ref(false)
 
 const revenueChartOption = computed(() => {
   const dates = revenueData.value.map(item => dayjs(item.date).format('MM/DD'))
@@ -210,11 +230,12 @@ const userGrowthChartOption = computed(() => {
 
 const loadData = async () => {
   try {
-    const [dashRes, revRes, userRes, errRes] = await Promise.allSettled([
+    const [dashRes, revRes, userRes, errRes, modRes] = await Promise.allSettled([
       getDashboard(),
       getRevenueStats({ start_date: dayjs().subtract(14, 'day').format('YYYY-MM-DD'), end_date: dayjs().format('YYYY-MM-DD') }),
       getUserStats({ start_date: dayjs().subtract(14, 'day').format('YYYY-MM-DD'), end_date: dayjs().format('YYYY-MM-DD') }),
-      getRecentErrors({ page: 1, page_size: 10 })
+      getRecentErrors({ page: 1, page_size: 10 }),
+      getModerationStatus()
     ])
 
     if (dashRes.status === 'fulfilled' && dashRes.value?.data) {
@@ -232,6 +253,10 @@ const loadData = async () => {
     if (errRes.status === 'fulfilled' && errRes.value?.data) {
       recentErrors.value = errRes.value.data.list || errRes.value.data || []
     }
+
+    if (modRes.status === 'fulfilled' && modRes.value?.data !== undefined) {
+      moderationEnabled.value = modRes.value.data
+    }
   } catch (error) {
     // silently handle
   }
@@ -240,6 +265,15 @@ const loadData = async () => {
 onMounted(() => {
   loadData()
 })
+
+const handleModerationToggle = async (val) => {
+  try {
+    await toggleModeration(val)
+    ElMessage.success(val ? '内容审核已开启' : '内容审核已关闭')
+  } catch {
+    moderationEnabled.value = !val
+  }
+}
 </script>
 
 <style lang="scss" scoped>
@@ -253,6 +287,27 @@ onMounted(() => {
     display: flex;
     justify-content: space-between;
     align-items: center;
+  }
+
+  .setting-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+
+    .setting-info {
+      .setting-label {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--color-text-primary);
+      }
+
+      .setting-desc {
+        font-size: 13px;
+        color: var(--color-text-secondary);
+        margin-top: 4px;
+      }
+    }
   }
 }
 </style>

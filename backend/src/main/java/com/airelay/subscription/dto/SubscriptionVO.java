@@ -27,6 +27,8 @@ public class SubscriptionVO {
 
     private Integer autoRenew;
 
+    private String autoRenewPaymentMethod;
+
     private Long tokenQuota;
 
     private Long usedQuota;

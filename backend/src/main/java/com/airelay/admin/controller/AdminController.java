@@ -10,6 +10,7 @@ import com.airelay.monitor.dto.DailyUsageDTO;
 import com.airelay.monitor.dto.DashboardStatsDTO;
 import com.airelay.monitor.service.MonitorService;
 import com.airelay.relay.entity.ModelPrice;
+import com.airelay.relay.service.ContentModerationService;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,6 +31,7 @@ public class AdminController {
 
     private final AdminService adminService;
     private final MonitorService monitorService;
+    private final ContentModerationService contentModerationService;
 
     @Operation(summary = "平台概览")
     @GetMapping("/overview")
@@ -105,6 +107,21 @@ public class AdminController {
     @PreAuthorize("hasRole('ADMIN')")
     public Result<Void> resetUserPassword(@PathVariable Long id, @RequestParam String newPassword) {
         adminService.resetUserPassword(id, newPassword);
+        return Result.ok();
+    }
+
+    @Operation(summary = "获取内容审核状态")
+    @GetMapping("/moderation/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Result<Boolean> getModerationStatus() {
+        return Result.ok(contentModerationService.isEnabled());
+    }
+
+    @Operation(summary = "切换内容审核开关")
+    @PostMapping("/moderation/toggle")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Result<Void> toggleModeration(@RequestParam boolean enabled) {
+        contentModerationService.setEnabled(enabled);
         return Result.ok();
     }
 }

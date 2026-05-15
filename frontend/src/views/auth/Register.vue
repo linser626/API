@@ -66,6 +66,14 @@
               />
             </el-form-item>
             <el-form-item>
+              <el-input
+                v-model="registerForm.referralCode"
+                placeholder="邀请码（选填）"
+                :prefix-icon="Promotion"
+                clearable
+              />
+            </el-form-item>
+            <el-form-item>
               <el-button
                 type="primary"
                 :loading="loading"
@@ -87,13 +95,14 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
-import { User, Lock, Message } from '@element-plus/icons-vue'
+import { User, Lock, Message, Promotion } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 
 const registerFormRef = ref(null)
@@ -103,7 +112,8 @@ const registerForm = reactive({
   username: '',
   email: '',
   password: '',
-  confirmPassword: ''
+  confirmPassword: '',
+  referralCode: ''
 })
 
 const validateConfirmPassword = (rule, value, callback) => {
@@ -142,7 +152,8 @@ const handleRegister = async () => {
     await userStore.register({
       username: registerForm.username,
       email: registerForm.email,
-      password: registerForm.password
+      password: registerForm.password,
+      referralCode: registerForm.referralCode || undefined
     })
     ElMessage.success('注册成功，请登录')
     router.push('/login')
@@ -152,6 +163,12 @@ const handleRegister = async () => {
     loading.value = false
   }
 }
+
+onMounted(() => {
+  if (route.query.ref) {
+    registerForm.referralCode = route.query.ref
+  }
+})
 </script>
 
 <style lang="scss" scoped>

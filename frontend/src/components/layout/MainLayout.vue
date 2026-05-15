@@ -34,9 +34,21 @@
           <el-icon><DataLine /></el-icon>
           <template #title>用量监控</template>
         </el-menu-item>
+        <el-menu-item index="/playground">
+          <el-icon><ChatDotRound /></el-icon>
+          <template #title>在线测试</template>
+        </el-menu-item>
         <el-menu-item index="/coupons">
           <el-icon><Present /></el-icon>
           <template #title>优惠券</template>
+        </el-menu-item>
+        <el-menu-item index="/referral">
+          <el-icon><Share /></el-icon>
+          <template #title>推荐返利</template>
+        </el-menu-item>
+        <el-menu-item index="/docs">
+          <el-icon><Document /></el-icon>
+          <template #title>API文档</template>
         </el-menu-item>
         <el-menu-item v-if="userStore.isAdmin" index="/admin/dashboard">
           <el-icon><Setting /></el-icon>

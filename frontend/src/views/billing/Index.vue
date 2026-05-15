@@ -42,6 +42,10 @@
               style="width: 260px; margin-left: 12px;"
               @change="loadTransactions"
             />
+            <el-button type="success" plain style="margin-left: 12px;" @click="handleExportTransactions" :loading="exportLoading">
+              <el-icon><Download /></el-icon>
+              导出CSV
+            </el-button>
           </div>
         </div>
       </template>
@@ -150,15 +154,18 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { getOverview, getTransactions, recharge } from '@/api/billing'
+import { exportTransactions } from '@/api/monitor'
 import { pay } from '@/api/payment'
-import { formatMoney, formatDate } from '@/utils/format'
+import { formatMoney, formatDate, downloadFile } from '@/utils/format'
 import { ElMessage } from 'element-plus'
+import dayjs from 'dayjs'
 
 const loading = ref(false)
 const rechargeDialogVisible = ref(false)
 const rechargeLoading = ref(false)
 const rechargeCouponLoading = ref(false)
 const rechargeCouponInfo = ref(null)
+const exportLoading = ref(false)
 
 const overview = reactive({
   balance: 0,
@@ -242,6 +249,28 @@ const loadTransactions = async () => {
     // handled by interceptor
   } finally {
     loading.value = false
+  }
+}
+
+const handleExportTransactions = async () => {
+  exportLoading.value = true
+  try {
+    const params = {}
+    if (filters.type) params.type = filters.type
+    if (filters.dateRange && filters.dateRange.length === 2) {
+      params.startTime = filters.dateRange[0] + 'T00:00:00'
+      params.endTime = filters.dateRange[1] + 'T23:59:59'
+    }
+
+    const response = await exportTransactions(params)
+    const blob = new Blob([response], { type: 'text/csv;charset=utf-8' })
+    const filename = `export_transactions_${dayjs().format('YYYYMMDD')}.csv`
+    downloadFile(blob, filename)
+    ElMessage.success('导出成功')
+  } catch (error) {
+    ElMessage.error('导出失败，请重试')
+  } finally {
+    exportLoading.value = false
   }
 }
 

@@ -27,6 +27,9 @@ service.interceptors.request.use(
 service.interceptors.response.use(
   (response) => {
     activeRequests = Math.max(0, activeRequests - 1)
+    if (response.config?.responseType === 'blob') {
+      return response.data
+    }
     const res = response.data
     if (res.code && res.code !== 0 && res.code !== 200) {
       ElMessage.error(res.message || '请求失败')
@@ -68,7 +71,12 @@ service.interceptors.response.use(
 
 export const getLoadingCount = () => activeRequests
 
-export const get = (url, params) => service.get(url, { params })
+export const get = (url, paramsOrConfig) => {
+  if (paramsOrConfig && (paramsOrConfig.params !== undefined || paramsOrConfig.responseType !== undefined)) {
+    return service.get(url, paramsOrConfig)
+  }
+  return service.get(url, { params: paramsOrConfig })
+}
 export const post = (url, data) => service.post(url, data)
 export const put = (url, data) => service.put(url, data)
 export const del = (url) => service.delete(url)

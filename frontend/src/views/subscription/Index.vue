@@ -11,14 +11,30 @@
           <div>
             <div class="sub-name">当前套餐: {{ currentSubscription.plan_name || '免费版' }}</div>
             <div class="sub-detail">
-              <span v-if="currentSubscription.expires_at">到期时间: {{ formatDate(currentSubscription.expires_at) }}</span>
+              <span v-if="currentSubscription.end_time">到期时间: {{ formatDate(currentSubscription.end_time) }}</span>
               <span v-else>永久有效</span>
             </div>
           </div>
         </div>
-        <el-button v-if="currentSubscription.plan_name && currentSubscription.plan_name !== '免费版'" type="danger" plain @click="handleCancel">
-          取消订阅
-        </el-button>
+        <div class="current-sub-actions">
+          <div class="auto-renew-section">
+            <span class="auto-renew-label">自动续费</span>
+            <el-switch
+              v-model="autoRenewEnabled"
+              @change="handleAutoRenewChange"
+              :loading="autoRenewLoading"
+              active-text="已开启"
+              inactive-text="已关闭"
+            />
+          </div>
+          <el-button v-if="currentSubscription.plan_name && currentSubscription.plan_name !== '免费版'" type="danger" plain @click="handleCancel">
+            取消订阅
+          </el-button>
+        </div>
+      </div>
+      <div v-if="autoRenewEnabled && currentSubscription.end_time" class="auto-renew-info">
+        <el-icon :size="14" color="#E6A23C"><Warning /></el-icon>
+        <span>下次续费日期: {{ formatDate(currentSubscription.end_time) }}，将从余额自动扣费</span>
       </div>
     </el-card>
 
@@ -121,12 +137,50 @@
         <el-button type="primary" class="qr-confirm-btn" @click="handleQrConfirm">我已完成支付</el-button>
       </div>
     </el-dialog>
+
+    <el-dialog v-model="autoRenewDialogVisible" title="开启自动续费" width="440px">
+      <div class="auto-renew-dialog-content">
+        <p>开启自动续费后，系统将在订阅到期前自动从您的余额扣费续期。</p>
+        <el-form :model="autoRenewForm" label-width="90px" class="mt-16">
+          <el-form-item label="扣费方式">
+            <el-radio-group v-model="autoRenewForm.paymentMethod">
+              <el-radio value="balance">
+                <div class="payment-option">
+                  <el-icon :size="18" color="#E6A23C"><Wallet /></el-icon>
+                  <span>余额扣费</span>
+                </div>
+              </el-radio>
+              <el-radio value="alipay">
+                <div class="payment-option">
+                  <el-icon :size="18" color="#1677ff"><CreditCard /></el-icon>
+                  <span>支付宝</span>
+                </div>
+              </el-radio>
+              <el-radio value="wechat">
+                <div class="payment-option">
+                  <el-icon :size="18" color="#07c160"><ChatDotRound /></el-icon>
+                  <span>微信支付</span>
+                </div>
+              </el-radio>
+            </el-radio-group>
+          </el-form-item>
+        </el-form>
+        <div v-if="currentSubscription" class="auto-renew-summary">
+          <div>续费金额: <strong>¥{{ currentSubscription.plan_price || '0.00' }}</strong></div>
+          <div v-if="currentSubscription.end_time">下次续费: {{ formatDate(currentSubscription.end_time) }}</div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="autoRenewDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="autoRenewLoading" @click="confirmEnableAutoRenew">确认开启</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { listPlans, getCurrentSubscription, subscribe, cancelSubscription } from '@/api/subscription'
+import { listPlans, getCurrentSubscription, subscribe, cancelSubscription, enableAutoRenew, disableAutoRenew } from '@/api/subscription'
 import { pay } from '@/api/payment'
 import { formatDate } from '@/utils/format'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -139,6 +193,13 @@ const selectedPlan = ref(null)
 const qrDialogVisible = ref(false)
 const couponLoading = ref(false)
 const couponInfo = ref(null)
+const autoRenewEnabled = ref(false)
+const autoRenewLoading = ref(false)
+const autoRenewDialogVisible = ref(false)
+
+const autoRenewForm = reactive({
+  paymentMethod: 'balance'
+})
 
 const planIcons = {
   '免费版': 'Ticket',
@@ -184,9 +245,49 @@ const loadData = async () => {
 
     if (subRes.status === 'fulfilled' && subRes.value?.data) {
       currentSubscription.value = subRes.value.data
+      autoRenewEnabled.value = subRes.value.data.auto_renew === 1
     }
   } catch (error) {
     // silently handle
+  }
+}
+
+const handleAutoRenewChange = (val) => {
+  if (val) {
+    autoRenewEnabled.value = false
+    autoRenewForm.paymentMethod = 'balance'
+    autoRenewDialogVisible.value = true
+  } else {
+    handleDisableAutoRenew()
+  }
+}
+
+const confirmEnableAutoRenew = async () => {
+  autoRenewLoading.value = true
+  try {
+    await enableAutoRenew({ paymentMethod: autoRenewForm.paymentMethod })
+    autoRenewEnabled.value = true
+    autoRenewDialogVisible.value = false
+    ElMessage.success('自动续费已开启')
+    loadData()
+  } catch (error) {
+    autoRenewEnabled.value = false
+  } finally {
+    autoRenewLoading.value = false
+  }
+}
+
+const handleDisableAutoRenew = async () => {
+  autoRenewLoading.value = true
+  try {
+    await disableAutoRenew()
+    autoRenewEnabled.value = false
+    ElMessage.success('自动续费已关闭')
+    loadData()
+  } catch (error) {
+    autoRenewEnabled.value = true
+  } finally {
+    autoRenewLoading.value = false
   }
 }
 
@@ -297,6 +398,35 @@ onMounted(() => {
           margin-top: 4px;
         }
       }
+
+      .current-sub-actions {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+
+        .auto-renew-section {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+
+          .auto-renew-label {
+            font-size: 14px;
+            color: var(--color-text-regular);
+            font-weight: 500;
+          }
+        }
+      }
+    }
+
+    .auto-renew-info {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #f0f0f0;
+      font-size: 13px;
+      color: var(--color-text-secondary);
     }
   }
 
@@ -424,6 +554,30 @@ onMounted(() => {
     .qr-confirm-btn {
       width: 100%;
       margin-top: 20px;
+    }
+  }
+
+  .auto-renew-dialog-content {
+    p {
+      font-size: 14px;
+      color: var(--color-text-regular);
+      line-height: 1.6;
+    }
+
+    .auto-renew-summary {
+      margin-top: 16px;
+      padding: 12px;
+      background: #f5f7fa;
+      border-radius: 8px;
+      font-size: 14px;
+
+      div {
+        margin-bottom: 4px;
+
+        strong {
+          color: var(--color-primary);
+        }
+      }
     }
   }
 }

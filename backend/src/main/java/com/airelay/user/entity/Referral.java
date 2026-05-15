@@ -4,11 +4,12 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("subscription")
-public class Subscription implements Serializable {
+@TableName("referral")
+public class Referral implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
@@ -17,21 +18,16 @@ public class Subscription implements Serializable {
 
     private Long userId;
 
-    private Long planId;
+    private String referralCode;
 
-    private String status;
+    private Long referredBy;
 
-    private LocalDateTime startTime;
+    private Integer totalReferrals;
 
-    private LocalDateTime endTime;
+    private BigDecimal totalEarned;
 
-    private Integer autoRenew;
-
-    private String autoRenewPaymentMethod;
+    private BigDecimal commissionRate;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
-
-    @TableField(fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updatedAt;
 }

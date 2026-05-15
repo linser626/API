@@ -104,6 +104,9 @@ app:
   notification:
     balance-warning-threshold: 1.0
     subscription-warning-days: 3
+  referral:
+    base-url: http://localhost:5173
+    default-commission-rate: 10.00
   channel:
     openai:
       base-url: https://api.openai.com
@@ -117,3 +120,14 @@ app:
     enabled: true
     requests-per-minute: 60
     requests-per-day: 1000
+  moderation:
+    enabled: false
+    blocked-words:
+      - "暴力"
+      - "色情"
+      - "赌博"
+    check-prompt-injection: true
+    prompt-injection-patterns:
+      - "ignore previous instructions"
+      - "disregard all above"
+      - "forget everything"

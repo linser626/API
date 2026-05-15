@@ -7,6 +7,7 @@ import com.airelay.channel.entity.Channel;
 import com.airelay.channel.service.ChannelService;
 import com.airelay.common.BusinessException;
 import com.airelay.common.ErrorCode;
+import com.airelay.relay.dto.ModerationResult;
 import com.airelay.relay.dto.TokenUsage;
 import com.airelay.relay.entity.ModelPrice;
 import com.airelay.relay.entity.RequestLog;
@@ -53,6 +54,7 @@ public class RelayService {
     private final TokenCountService tokenCountService;
     private final RateLimitService rateLimitService;
     private final SseHandler sseHandler;
+    private final ContentModerationService contentModerationService;
     private final UserMapper userMapper;
     private final SubscriptionMapper subscriptionMapper;
     private final ModelPriceMapper modelPriceMapper;
@@ -89,6 +91,13 @@ public class RelayService {
         checkSubscriptionAndQuota(user);
 
         rateLimitService.checkRateLimit(validatedKey.getId(), validatedKey.getRateLimitRpm(), validatedKey.getRateLimitTpm());
+
+        if (contentModerationService.isEnabled()) {
+            ModerationResult moderationResult = contentModerationService.checkContent(requestBody);
+            if (!moderationResult.isPassed()) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, moderationResult.getReason());
+            }
+        }
 
         String actualModel = model;
         if (actualModel == null || actualModel.isEmpty()) {
@@ -270,6 +279,13 @@ public class RelayService {
 
         checkSubscriptionAndQuota(user);
         rateLimitService.checkRateLimit(validatedKey.getId(), validatedKey.getRateLimitRpm(), validatedKey.getRateLimitTpm());
+
+        if (contentModerationService.isEnabled()) {
+            ModerationResult moderationResult = contentModerationService.checkContent(requestBody);
+            if (!moderationResult.isPassed()) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, moderationResult.getReason());
+            }
+        }
 
         String actualModel = model;
         if (actualModel == null || actualModel.isEmpty()) {

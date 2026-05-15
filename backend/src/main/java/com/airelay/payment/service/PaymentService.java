@@ -13,6 +13,7 @@ import com.airelay.payment.mapper.UserCouponMapper;
 import com.airelay.subscription.service.SubscriptionService;
 import com.airelay.user.entity.User;
 import com.airelay.user.mapper.UserMapper;
+import com.airelay.user.service.ReferralService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -38,6 +39,7 @@ public class PaymentService {
     private final UserMapper userMapper;
     private final BillingService billingService;
     private final SubscriptionService subscriptionService;
+    private final ReferralService referralService;
 
     @Transactional
     public Order createOrder(Long userId, String type, BigDecimal amount, String paymentMethod,
@@ -121,6 +123,12 @@ public class PaymentService {
             } else {
                 log.error("订阅订单缺少套餐ID: orderNo={}", orderNo);
             }
+        }
+
+        try {
+            referralService.processCommission(order.getId(), order.getUserId(), order.getAmount());
+        } catch (Exception e) {
+            log.warn("处理推荐佣金失败: orderNo={}, error={}", orderNo, e.getMessage());
         }
 
         log.info("支付成功处理完成: orderNo={}, type={}", orderNo, order.getType());

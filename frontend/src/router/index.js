@@ -54,10 +54,28 @@ const routes = [
         meta: { title: '用量监控' }
       },
       {
+        path: 'playground',
+        name: 'Playground',
+        component: () => import('@/views/playground/Index.vue'),
+        meta: { title: '在线测试' }
+      },
+      {
         path: 'coupons',
         name: 'Coupons',
         component: () => import('@/views/coupon/Index.vue'),
         meta: { title: '优惠券' }
+      },
+      {
+        path: 'referral',
+        name: 'Referral',
+        component: () => import('@/views/referral/Index.vue'),
+        meta: { title: '推荐返利' }
+      },
+      {
+        path: 'docs',
+        name: 'Docs',
+        component: () => import('@/views/docs/Index.vue'),
+        meta: { title: 'API文档' }
       },
       {
         path: 'notifications',

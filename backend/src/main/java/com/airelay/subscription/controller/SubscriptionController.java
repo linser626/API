@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @Tag(name = "订阅管理")
 @RestController
@@ -52,5 +53,20 @@ public class SubscriptionController {
     @GetMapping("/api/subscription/quota")
     public Result<UserQuotaDTO> getUserQuotaAndLimits() {
         return Result.ok(subscriptionService.getUserQuotaAndLimits(SecurityUtils.getCurrentUserId()));
+    }
+
+    @Operation(summary = "启用自动续费")
+    @PostMapping("/api/subscription/auto-renew/enable")
+    public Result<Void> enableAutoRenew(@RequestBody Map<String, String> body) {
+        String paymentMethod = body.get("paymentMethod");
+        subscriptionService.enableAutoRenew(SecurityUtils.getCurrentUserId(), paymentMethod);
+        return Result.ok();
+    }
+
+    @Operation(summary = "禁用自动续费")
+    @PostMapping("/api/subscription/auto-renew/disable")
+    public Result<Void> disableAutoRenew() {
+        subscriptionService.disableAutoRenew(SecurityUtils.getCurrentUserId());
+        return Result.ok();
     }
 }

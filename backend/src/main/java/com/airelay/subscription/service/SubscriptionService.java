@@ -1,7 +1,9 @@
 package com.airelay.subscription.service;
 
+import com.airelay.billing.service.BillingService;
 import com.airelay.common.BusinessException;
 import com.airelay.common.ErrorCode;
+import com.airelay.monitor.service.NotificationService;
 import com.airelay.payment.entity.Order;
 import com.airelay.payment.service.PaymentService;
 import com.airelay.subscription.dto.PlanVO;
@@ -24,6 +26,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,17 +39,23 @@ public class SubscriptionService {
     private final SubscriptionMapper subscriptionMapper;
     private final UserMapper userMapper;
     private final PaymentService paymentService;
+    private final BillingService billingService;
+    private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
 
     public SubscriptionService(PlanMapper planMapper,
                                SubscriptionMapper subscriptionMapper,
                                UserMapper userMapper,
                                @Lazy PaymentService paymentService,
+                               @Lazy BillingService billingService,
+                               NotificationService notificationService,
                                ObjectMapper objectMapper) {
         this.planMapper = planMapper;
         this.subscriptionMapper = subscriptionMapper;
         this.userMapper = userMapper;
         this.paymentService = paymentService;
+        this.billingService = billingService;
+        this.notificationService = notificationService;
         this.objectMapper = objectMapper;
     }
 
@@ -91,6 +100,7 @@ public class SubscriptionService {
                 .startTime(subscription.getStartTime())
                 .endTime(subscription.getEndTime())
                 .autoRenew(subscription.getAutoRenew())
+                .autoRenewPaymentMethod(subscription.getAutoRenewPaymentMethod())
                 .tokenQuota(plan.getTokenQuota())
                 .usedQuota(user != null ? user.getUsedQuota() : 0L)
                 .rateLimitRpm(plan.getRateLimitRpm())
@@ -168,24 +178,145 @@ public class SubscriptionService {
         }
 
         subscription.setAutoRenew(0);
+        subscription.setAutoRenewPaymentMethod(null);
         subscriptionMapper.updateById(subscription);
 
         log.info("取消自动续费: userId={}, subscriptionId={}", userId, subscriptionId);
     }
 
-    @Scheduled(fixedRate = 300000)
+    @Transactional
+    public void enableAutoRenew(Long userId, String paymentMethod) {
+        Subscription subscription = subscriptionMapper.selectOne(
+                new LambdaQueryWrapper<Subscription>()
+                        .eq(Subscription::getUserId, userId)
+                        .eq(Subscription::getStatus, "active")
+                        .orderByDesc(Subscription::getEndTime)
+                        .last("LIMIT 1")
+        );
+
+        if (subscription == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "没有活跃的订阅");
+        }
+
+        if (paymentMethod == null || (!paymentMethod.equals("alipay") && !paymentMethod.equals("wechat") && !paymentMethod.equals("balance"))) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "支付方式无效，支持: alipay/wechat/balance");
+        }
+
+        subscription.setAutoRenew(1);
+        subscription.setAutoRenewPaymentMethod(paymentMethod);
+        subscriptionMapper.updateById(subscription);
+
+        log.info("启用自动续费: userId={}, subscriptionId={}, paymentMethod={}", userId, subscription.getId(), paymentMethod);
+    }
+
+    @Transactional
+    public void disableAutoRenew(Long userId) {
+        Subscription subscription = subscriptionMapper.selectOne(
+                new LambdaQueryWrapper<Subscription>()
+                        .eq(Subscription::getUserId, userId)
+                        .eq(Subscription::getStatus, "active")
+                        .orderByDesc(Subscription::getEndTime)
+                        .last("LIMIT 1")
+        );
+
+        if (subscription == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "没有活跃的订阅");
+        }
+
+        subscription.setAutoRenew(0);
+        subscription.setAutoRenewPaymentMethod(null);
+        subscriptionMapper.updateById(subscription);
+
+        log.info("禁用自动续费: userId={}, subscriptionId={}", userId, subscription.getId());
+    }
+
+    @Scheduled(fixedRate = 3600000)
     @Transactional
     public void checkAndExpireSubscriptions() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime renewalThreshold = now.plusHours(24);
+
+        List<Subscription> renewingSubscriptions = subscriptionMapper.selectList(
+                new LambdaQueryWrapper<Subscription>()
+                        .eq(Subscription::getStatus, "active")
+                        .eq(Subscription::getAutoRenew, 1)
+                        .between(Subscription::getEndTime, now, renewalThreshold)
+        );
+
+        for (Subscription subscription : renewingSubscriptions) {
+            try {
+                attemptAutoRenewal(subscription);
+            } catch (Exception e) {
+                log.error("自动续费失败: userId={}, subscriptionId={}, error={}",
+                        subscription.getUserId(), subscription.getId(), e.getMessage());
+                subscription.setAutoRenew(0);
+                subscription.setAutoRenewPaymentMethod(null);
+                subscriptionMapper.updateById(subscription);
+
+                notificationService.sendNotification(
+                        subscription.getUserId(),
+                        NotificationService.NotificationType.PAYMENT_FAILED,
+                        "自动续费失败",
+                        "您的订阅自动续费失败，请检查余额或手动续费。"
+                );
+            }
+        }
+
         List<Subscription> expiredSubscriptions = subscriptionMapper.selectList(
                 new LambdaQueryWrapper<Subscription>()
                         .eq(Subscription::getStatus, "active")
-                        .lt(Subscription::getEndTime, LocalDateTime.now())
+                        .lt(Subscription::getEndTime, now)
         );
 
         for (Subscription subscription : expiredSubscriptions) {
             subscription.setStatus("expired");
             subscriptionMapper.updateById(subscription);
             log.info("订阅已过期: userId={}, subscriptionId={}", subscription.getUserId(), subscription.getId());
+
+            notificationService.sendNotification(
+                    subscription.getUserId(),
+                    NotificationService.NotificationType.SUBSCRIPTION_EXPIRING,
+                    "订阅已过期",
+                    "您的订阅已过期，请及时续费以继续使用服务。"
+            );
+        }
+    }
+
+    @Transactional
+    public void attemptAutoRenewal(Subscription subscription) {
+        Plan plan = planMapper.selectById(subscription.getPlanId());
+        if (plan == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "套餐不存在，无法续费");
+        }
+
+        User user = userMapper.selectById(subscription.getUserId());
+        if (user == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "用户不存在");
+        }
+
+        BigDecimal renewalPrice = plan.getPrice();
+
+        if (user.getBalance().compareTo(renewalPrice) >= 0) {
+            billingService.deductBalance(
+                    user.getId(),
+                    renewalPrice,
+                    "自动续费 - 套餐: " + plan.getName(),
+                    null
+            );
+
+            subscription.setEndTime(subscription.getEndTime().plusDays(plan.getDurationDays()));
+            subscriptionMapper.updateById(subscription);
+
+            log.info("自动续费成功: userId={}, subscriptionId={}, amount={}", user.getId(), subscription.getId(), renewalPrice);
+
+            notificationService.sendNotification(
+                    user.getId(),
+                    NotificationService.NotificationType.PAYMENT_SUCCESS,
+                    "自动续费成功",
+                    "您的订阅已自动续费成功，新到期时间: " + subscription.getEndTime().toString()
+            );
+        } else {
+            throw new BusinessException(ErrorCode.INSUFFICIENT_BALANCE, "余额不足，无法自动续费");
         }
     }
 

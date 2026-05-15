@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS `subscription` (
   `start_time` DATETIME NOT NULL,
   `end_time` DATETIME NOT NULL,
   `auto_renew` TINYINT NOT NULL DEFAULT 0,
+  `auto_renew_payment_method` VARCHAR(30) DEFAULT NULL COMMENT 'auto-renewal payment method: alipay/wechat',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_user_id (`user_id`),
@@ -202,3 +203,32 @@ INSERT IGNORE INTO `plan` (`name`, `description`, `price`, `duration_days`, `tok
 ('基础版', '适合个人开发者', 29.90, 30, 5000000, 60, 100000, 5, '["全部模型访问","60RPM限速","优先渠道"]', 0, 1, 1),
 ('专业版', '适合团队和企业', 99.90, 30, -1, 120, 200000, 20, '["全部模型访问","120RPM限速","优先渠道","专属客服"]', 0, 2, 1),
 ('企业版', '大规模商业使用', 299.90, 30, -1, 300, 500000, 100, '["全部模型访问","300RPM限速","最高优先级","专属客服","定制模型"]', 0, 3, 1);
+
+CREATE TABLE IF NOT EXISTS `referral` (
+  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+  `user_id` BIGINT NOT NULL UNIQUE,
+  `referral_code` VARCHAR(20) NOT NULL UNIQUE,
+  `referred_by` BIGINT DEFAULT NULL COMMENT 'who referred this user',
+  `total_referrals` INT NOT NULL DEFAULT 0,
+  `total_earned` DECIMAL(12,4) NOT NULL DEFAULT 0.0000 COMMENT 'total commission earned',
+  `commission_rate` DECIMAL(5,2) NOT NULL DEFAULT 10.00 COMMENT 'commission percentage',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_user_id (`user_id`),
+  INDEX idx_referral_code (`referral_code`),
+  INDEX idx_referred_by (`referred_by`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `referral_record` (
+  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+  `referrer_id` BIGINT NOT NULL COMMENT 'who shared the referral',
+  `referred_id` BIGINT NOT NULL COMMENT 'who was referred',
+  `order_id` BIGINT DEFAULT NULL COMMENT 'the order that triggered commission',
+  `order_amount` DECIMAL(12,4) NOT NULL DEFAULT 0,
+  `commission` DECIMAL(12,4) NOT NULL DEFAULT 0,
+  `status` VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT 'pending/paid/cancelled',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_referrer_id (`referrer_id`),
+  INDEX idx_referred_id (`referred_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE `user` ADD COLUMN `referral_code` VARCHAR(20) DEFAULT NULL UNIQUE AFTER `avatar`;

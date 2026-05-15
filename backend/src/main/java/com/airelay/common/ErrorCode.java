@@ -21,7 +21,8 @@ public enum ErrorCode {
     COUPON_INVALID(1006, "优惠券无效"),
     ORDER_NOT_FOUND(1007, "订单不存在"),
     ORDER_STATUS_ERROR(1008, "订单状态错误"),
-    PAYMENT_FAILED(1009, "支付失败");
+    PAYMENT_FAILED(1009, "支付失败"),
+    CONTENT_BLOCKED(1010, "内容审核未通过");
 
     private final int code;
     private final String message;

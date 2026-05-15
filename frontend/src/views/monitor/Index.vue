@@ -2,15 +2,21 @@
   <div class="monitor-page">
     <div class="page-header flex-between">
       <h2>用量监控</h2>
-      <el-date-picker
-        v-model="dateRange"
-        type="daterange"
-        range-separator="至"
-        start-placeholder="开始日期"
-        end-placeholder="结束日期"
-        value-format="YYYY-MM-DD"
-        @change="loadData"
-      />
+      <div class="header-actions">
+        <el-date-picker
+          v-model="dateRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          value-format="YYYY-MM-DD"
+          @change="loadData"
+        />
+        <el-button type="success" plain @click="handleExportUsage" :loading="exportLoading">
+          <el-icon><Download /></el-icon>
+          导出CSV
+        </el-button>
+      </div>
     </div>
 
     <el-row :gutter="20" class="mb-20">
@@ -151,8 +157,9 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart, BarChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
-import { getUsageStats, getModelUsage, getDailyUsage } from '@/api/monitor'
-import { formatMoney, formatTokens, formatDate } from '@/utils/format'
+import { getUsageStats, getModelUsage, getDailyUsage, exportUsage } from '@/api/monitor'
+import { formatMoney, formatTokens, formatDate, downloadFile } from '@/utils/format'
+import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
 
 use([CanvasRenderer, LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent])
@@ -162,6 +169,7 @@ const dateRange = ref([
   dayjs().format('YYYY-MM-DD')
 ])
 const statusFilter = ref('')
+const exportLoading = ref(false)
 
 const stats = reactive({
   totalRequests: 0,
@@ -259,6 +267,27 @@ const loadData = async () => {
   }
 }
 
+const handleExportUsage = async () => {
+  exportLoading.value = true
+  try {
+    const params = {}
+    if (dateRange.value && dateRange.value.length === 2) {
+      params.startTime = dateRange.value[0] + 'T00:00:00'
+      params.endTime = dateRange.value[1] + 'T23:59:59'
+    }
+
+    const response = await exportUsage(params)
+    const blob = new Blob([response], { type: 'text/csv;charset=utf-8' })
+    const filename = `export_usage_${dayjs().format('YYYYMMDD')}.csv`
+    downloadFile(blob, filename)
+    ElMessage.success('导出成功')
+  } catch (error) {
+    ElMessage.error('导出失败，请重试')
+  } finally {
+    exportLoading.value = false
+  }
+}
+
 onMounted(() => {
   loadData()
 })
@@ -269,6 +298,12 @@ onMounted(() => {
   .card-title {
     font-size: 16px;
     font-weight: 600;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }
 
   .stats-content {

@@ -15,3 +15,11 @@ export function markNotificationRead(id) {
 export function markAllNotificationsRead() {
   return put('/api/notifications/read-all')
 }
+
+export function exportUsage(params) {
+  return get('/api/export/usage', { params, responseType: 'blob' })
+}
+
+export function exportTransactions(params) {
+  return get('/api/export/transactions', { params, responseType: 'blob' })
+}
