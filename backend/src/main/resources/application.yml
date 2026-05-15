@@ -1,0 +1,113 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: ai-relay-platform
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/ai_relay?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      pool-name: AiRelayHikariCP
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+      database: 0
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+          max-wait: 3000ms
+        shutdown-timeout: 200ms
+
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.airelay.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+jwt:
+  secret: YWlSZWxheVBsYXRmb3JtU2VjcmV0S2V5Rm9ySldUVG9rZW5HZW5lcmF0aW9uQW5kVmFsaWRhdGlvbjIwMjQ=
+  expiration: 86400000
+  refresh-expiration: 604800000
+
+alipay:
+  app-id: ""
+  private-key: ""
+  public-key: ""
+  gateway: https://openapi.alipay.com/gateway.do
+  notify-url: ""
+  return-url: ""
+  sign-type: RSA2
+  charset: UTF-8
+  format: json
+
+wechat-pay:
+  app-id: ""
+  mch-id: ""
+  api-v3-key: ""
+  private-key-path: ""
+  cert-serial-no: ""
+  notify-url: ""
+
+logging:
+  level:
+    root: INFO
+    com.airelay: DEBUG
+    com.baomidou.mybatisplus: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+  file:
+    name: logs/ai-relay.log
+    max-size: 50MB
+    max-history: 30
+
+app:
+  relay:
+    timeout: 60000
+    max-retries: 3
+    retry-interval: 1000
+    default-channel: openai
+  channel:
+    openai:
+      base-url: https://api.openai.com
+      api-key: ""
+      models: gpt-4,gpt-4-turbo,gpt-3.5-turbo
+    claude:
+      base-url: https://api.anthropic.com
+      api-key: ""
+      models: claude-3-opus,claude-3-sonnet,claude-3-haiku
+  rate-limit:
+    enabled: true
+    requests-per-minute: 60
+    requests-per-day: 1000
